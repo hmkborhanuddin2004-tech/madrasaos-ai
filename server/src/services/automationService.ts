@@ -148,7 +148,19 @@ export class AutomationService {
       'SELECT * FROM workflow_approvals WHERE id = ? AND tenant_id = ?',
       [approvalId, tenantId]
     );
-    if (!appr) throw new Error('Approval request not found');
+    if (!appr) {
+      const err: any = new Error('অনুমোদন অনুরোধটি খুঁজে পাওয়া যায়নি (Approval request not found)।');
+      err.statusCode = 404;
+      err.code = 'NOT_FOUND';
+      throw err;
+    }
+
+    if (appr.status !== 'pending') {
+      const err: any = new Error(`এই স্বয়ংক্রিয় কাজের অনুমোদনটি ইতিমধ্যে '${appr.status}' অবস্থায় রয়েছে।`);
+      err.statusCode = 409;
+      err.code = 'APPROVAL_ALREADY_DECIDED';
+      throw err;
+    }
 
     const now = new Date().toISOString();
     await db.run(

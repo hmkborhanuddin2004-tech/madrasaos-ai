@@ -21,6 +21,12 @@ router.get('/register', authenticate, async (req: AuthenticatedRequest, res: Res
     if (!classId) throw new Error('classId is required');
 
     const data = await attendanceService.getClassRegister(req.user!.tenantId, classId as string, date as string);
+    if (req.user!.role === 'student' || req.user!.role === 'guardian') {
+      const allowed = req.user!.linkedStudentIds || [];
+      if (data && Array.isArray(data.students)) {
+        data.students = data.students.filter((s: any) => allowed.includes(s.id));
+      }
+    }
     res.json({ success: true, data });
   } catch (err) {
     next(err);

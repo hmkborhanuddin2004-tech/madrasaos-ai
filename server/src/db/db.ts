@@ -7,9 +7,11 @@ export class DatabaseService {
 
   constructor(dbPath?: string) {
     const finalPath = dbPath || path.resolve(process.cwd(), 'data', 'madrasaos.sqlite');
-    const dir = path.dirname(finalPath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+    if (finalPath !== ':memory:') {
+      const dir = path.dirname(finalPath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
     }
     sqlite3.verbose();
     this.db = new sqlite3.Database(finalPath);
@@ -76,3 +78,21 @@ export class DatabaseService {
 }
 
 export const db = new DatabaseService();
+
+// Singleton for test-aware DB access (supports DB_PATH env var)
+let _testDb: DatabaseService | null = null;
+
+export function getDb(): DatabaseService {
+  if (!_testDb) {
+    const dbPath = process.env.DB_PATH || path.resolve(process.cwd(), 'data', 'madrasaos.sqlite');
+    _testDb = new DatabaseService(dbPath === ':memory:' ? ':memory:' : dbPath);
+  }
+  return _testDb;
+}
+
+export async function closeDb(): Promise<void> {
+  if (_testDb) {
+    await _testDb.close();
+    _testDb = null;
+  }
+}

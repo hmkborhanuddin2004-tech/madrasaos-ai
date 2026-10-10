@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { useSettings } from '../../context/SettingsContext';
 import {
   Users,
   CalendarCheck2,
+  Calendar,
   Receipt,
   BookOpen,
   Bed,
   AlertTriangle,
   Sparkles,
   ArrowRight,
+  ArrowUpRight,
   TrendingUp,
   UserPlus,
   PlusCircle,
@@ -22,10 +25,46 @@ interface AdminDashboardProps {
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onOpenAIQuery }) => {
   const { user, apiCall } = useAuth();
+  const { settings } = useSettings();
   const [summary, setSummary] = useState<any>(null);
   const [repeatedAbsences, setRepeatedAbsences] = useState<any[]>([]);
   const [briefing, setBriefing] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
+
+  // Priority: if admin or principal, display settings.principalName if set, otherwise user.fullNameBn
+  const adminDisplayName = (user?.role === 'madrasa_admin' || user?.role === 'principal')
+    ? (settings.principalName || user?.fullNameBn || 'মুহতামিম সাহেব')
+    : (user?.fullNameBn || 'ব্যবহারকারী');
+
+  // Real-time dynamic Bengali Date & Hijri Date calculation
+  const currentDateInfo = React.useMemo(() => {
+    const now = new Date();
+    const bnMonths = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
+    const bnDays = ['রবিবার', 'সোমবার', 'মঙ্গলবার', 'বুধবার', 'বৃহস্পতিবার', 'শুক্রবার', 'শনিবার'];
+    const toBn = (n: number | string) => String(n).replace(/[0-9]/g, (d) => '০১২৩৪৫৬৭৮৯'[+d]);
+
+    const dayName = bnDays[now.getDay()];
+    const dateNum = toBn(now.getDate());
+    const monthName = bnMonths[now.getMonth()];
+    const yearNum = toBn(now.getFullYear());
+
+    let hijriStr = '';
+    try {
+      const hijriFormatter = new Intl.DateTimeFormat('bn-BD-u-ca-islamic-umalqura', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      });
+      hijriStr = hijriFormatter.format(now) + ' হিজরী';
+    } catch {
+      hijriStr = `${toBn(10)} রবিউল আউয়াল ১৪৪৮ হিজরী`;
+    }
+
+    return {
+      dayName,
+      full: `${dayName}, ${dateNum} ${monthName} ${yearNum} • ${hijriStr}`
+    };
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -57,23 +96,45 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onOp
     <div className="space-y-6 animate-in fade-in duration-200">
       {/* Top Welcome Banner */}
       <div className="bg-gradient-to-br from-primary-900 via-primary-800 to-emerald-900 rounded-3xl p-6 text-white shadow-xl border border-primary-700/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="text-xs font-semibold text-emerald-300 uppercase tracking-wider flex items-center gap-1.5">
-            <span className="inline-block w-2 h-2 rounded-full bg-emerald-400"></span>
-            <span>মাদ্রাসা কমান্ড সেন্টার • ঢাকা ক্যাম্পাস</span>
+        <div className="space-y-1">
+          <div
+            onClick={() => onNavigate('settings')}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-300 uppercase tracking-wider bg-emerald-950/40 hover:bg-emerald-900/60 px-3 py-1 rounded-full border border-emerald-500/30 cursor-pointer transition active:scale-95 group"
+            title="মাদ্রাসার নাম ও সেটিংস পরিবর্তন করুন (ক্লিক করুন)"
+          >
+            <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span>মাদ্রাসা কমান্ড সেন্টার • {settings.nameBn || 'প্রধান ক্যাম্পাস'}</span>
+            <ArrowRight className="w-3 h-3 text-emerald-300 opacity-70 group-hover:translate-x-0.5 transition" />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-white mt-1">
-            আসসালামু আলাইকুম, {user.fullNameBn}
+
+          <h1
+            onClick={() => onNavigate('settings')}
+            className="text-2xl font-bold tracking-tight text-white mt-1 cursor-pointer hover:text-emerald-200 transition"
+            title="মুহতামিম / অ্যাডমিন সেটিংস পরিবর্তন করতে ক্লিক করুন"
+          >
+            আসসালামু আলাইকুম, {adminDisplayName}
           </h1>
-          <p className="text-xs text-emerald-200/80 mt-1">
-            আজকের তারিখ: ২০ সেপ্টেম্বর ২০২৬ • ৫ রবিউল আউয়াল ১৪৪৮ হিজরী • দারুল উলূম সেন্ট্রাল মাদ্রাসা
-          </p>
+
+          <div>
+            <button
+              type="button"
+              onClick={() => onNavigate('academics')}
+              className="inline-flex items-center gap-2 text-xs text-emerald-100 bg-black/25 hover:bg-black/40 px-3.5 py-1.5 rounded-xl border border-white/15 cursor-pointer transition active:scale-95 group shadow-xs mt-1 text-left"
+              title="একাডেমিক ক্যালেন্ডার, ক্লাস রুটিন ও পরীক্ষার সময়সূচী দেখুন (ক্লিক করুন)"
+            >
+              <Calendar className="w-3.5 h-3.5 text-emerald-300 group-hover:scale-110 transition flex-shrink-0" />
+              <span>
+                আজকের তারিখ: <strong className="font-bold text-white">{currentDateInfo.full}</strong> • {settings.nameBn || 'মাদ্রাসা'}
+              </span>
+              <ArrowUpRight className="w-3.5 h-3.5 text-emerald-300 opacity-80 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition flex-shrink-0" />
+            </button>
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
           <button
-            onClick={() => onOpenAIQuery('আজকের অবস্থা বলো')}
-            className="flex items-center gap-2 bg-gradient-to-r from-accent-gold to-amber-600 hover:from-amber-500 hover:to-accent-gold text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow-md transition active:scale-95"
+            onClick={() => onOpenAIQuery('আজকের পুরো মাদ্রাসার সকালের সংক্ষিপ্ত ব্রিফিং ও গুরুত্বপূর্ণ নোটিশ জানাও')}
+            className="flex items-center gap-2 bg-gradient-to-r from-accent-gold to-amber-600 hover:from-amber-500 hover:to-accent-gold text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow-md transition active:scale-95 cursor-pointer"
           >
             <Sparkles className="w-4 h-4" />
             <span>সকালের মাদ্রাসা ব্রিফিং শুনুন</span>
@@ -83,7 +144,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onOp
 
       {/* AI Daily Brief Digest Banner */}
       {briefing && (
-        <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-2xl p-4 flex items-start gap-3.5 shadow-sm">
+        <div
+          onClick={() => onOpenAIQuery(briefing)}
+          className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-2xl p-4 flex items-start gap-3.5 shadow-sm cursor-pointer hover:border-emerald-400 transition"
+          title="এআই বিশ্লেষণে বিস্তারিত জানতে ক্লিক করুন"
+        >
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-accent-gold to-amber-600 text-white flex items-center justify-center flex-shrink-0 shadow-sm font-bold">
             AI
           </div>
@@ -95,6 +160,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onOp
                   যাচাইকৃত ডাটা
                 </span>
               </div>
+              <ArrowRight className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
             </div>
             <p className="text-xs text-slate-700 dark:text-slate-200 mt-1 leading-relaxed">
               {briefing}

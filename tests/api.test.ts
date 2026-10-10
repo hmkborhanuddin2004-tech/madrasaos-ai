@@ -7,6 +7,7 @@ import { seedDatabase } from '../server/src/db/seed.js';
 let adminToken: string;
 let teacherToken: string;
 let guardianToken: string;
+let studentToken: string;
 
 beforeAll(async () => {
   await initializeDatabase();
@@ -32,6 +33,13 @@ beforeAll(async () => {
     .send({ identifier: '01811111111', password: 'parent123' });
   expect(guardianRes.status).toBe(200);
   guardianToken = guardianRes.body.data.token;
+
+  // Login as Student
+  const studentRes = await request(app)
+    .post('/api/v1/auth/login')
+    .send({ identifier: 'student_abdullah', password: 'student123' });
+  expect(studentRes.status).toBe(200);
+  studentToken = studentRes.body.data.token;
 });
 
 describe('1. System & Authentication', () => {
@@ -78,6 +86,14 @@ describe('2. Role-Based Access Control (RBAC)', () => {
     expect(res.body.error.code).toBe('FORBIDDEN');
   });
 
+  it('Blocks Teacher from accessing institution invoice list', async () => {
+    const res = await request(app)
+      .get('/api/v1/finance/invoices')
+      .set('Authorization', `Bearer ${teacherToken}`);
+    expect(res.status).toBe(403);
+    expect(res.body.error.code).toBe('FORBIDDEN');
+  });
+
   it('Restricts Guardian to only view linked child profile', async () => {
     // std_001 is linked to guardian_salam
     const ownChildRes = await request(app)
@@ -90,6 +106,46 @@ describe('2. Role-Based Access Control (RBAC)', () => {
       .get('/api/v1/students/std_005')
       .set('Authorization', `Bearer ${guardianToken}`);
     expect(foreignChildRes.status).toBe(403);
+  });
+
+  it('Restricts Student to only view own profile and blocks foreign student profile', async () => {
+    // std_001 is linked to student_abdullah
+    const ownRes = await request(app)
+      .get('/api/v1/students/std_001')
+      .set('Authorization', `Bearer ${studentToken}`);
+    expect(ownRes.status).toBe(200);
+    expect(ownRes.body.data.full_name_bn).toBe('আব্দুল্লাহ আল-মামুন');
+
+    // std_002 is NOT linked to student_abdullah
+    const foreignRes = await request(app)
+      .get('/api/v1/students/std_002')
+      .set('Authorization', `Bearer ${studentToken}`);
+    expect(foreignRes.status).toBe(403);
+    expect(foreignRes.body.error.code).toBe('FORBIDDEN');
+  });
+
+  it('Restricts Student to only view own invoices', async () => {
+    const res = await request(app)
+      .get('/api/v1/finance/invoices')
+      .set('Authorization', `Bearer ${studentToken}`);
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.data)).toBe(true);
+    // All returned invoices must belong to std_001
+    for (const inv of res.body.data) {
+      expect(inv.student_id).toBe('std_001');
+    }
+  });
+
+  it('Protects Admissions management: Admin allowed, Teacher blocked', async () => {
+    const adminRes = await request(app)
+      .get('/api/v1/admissions')
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(adminRes.status).toBe(200);
+
+    const teacherRes = await request(app)
+      .get('/api/v1/admissions')
+      .set('Authorization', `Bearer ${teacherToken}`);
+    expect(teacherRes.status).toBe(403);
   });
 });
 
@@ -202,6 +258,7 @@ describe('6. Finance & Payment Collection', () => {
     expect(invoicesRes.body.data.length).toBeGreaterThan(0);
 
     const targetInvoice = invoicesRes.body.data[0];
+    const txnId = `TXN_TEST_BKASH_${Date.now()}`;
     const collectRes = await request(app)
       .post('/api/v1/finance/payments/collect')
       .set('Authorization', `Bearer ${adminToken}`)
@@ -209,16 +266,53 @@ describe('6. Finance & Payment Collection', () => {
         invoiceId: targetInvoice.id,
         amount: 500,
         paymentMethod: 'bkash',
-        transactionId: 'TXN_TEST_BKASH_12345'
+        transactionId: txnId
       });
     expect(collectRes.status).toBe(200);
     expect(collectRes.body.data.success).toBe(true);
     expect(collectRes.body.data.amount).toBe(500);
+
+    // Idempotency: Duplicate transactionId must be rejected with 409 DUPLICATE_TRANSACTION
+    const duplicateRes = await request(app)
+      .post('/api/v1/finance/payments/collect')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        invoiceId: targetInvoice.id,
+        amount: 500,
+        paymentMethod: 'bkash',
+        transactionId: txnId
+      });
+    expect(duplicateRes.status).toBe(409);
+    expect(duplicateRes.body.error.code).toBe('DUPLICATE_TRANSACTION');
+
+    // Validation: Negative or zero amount must be rejected with 400
+    const zeroAmountRes = await request(app)
+      .post('/api/v1/finance/payments/collect')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        invoiceId: targetInvoice.id,
+        amount: 0,
+        paymentMethod: 'bkash',
+        transactionId: `TXN_TEST_ZERO_${Date.now()}`
+      });
+    expect(zeroAmountRes.status).toBe(400);
+
+    // Validation: Overpayment exceeding due amount must be rejected with 400
+    const overpayRes = await request(app)
+      .post('/api/v1/finance/payments/collect')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        invoiceId: targetInvoice.id,
+        amount: 999999,
+        paymentMethod: 'bkash',
+        transactionId: `TXN_TEST_OVER_${Date.now()}`
+      });
+    expect(overpayRes.status).toBe(400);
   });
 });
 
 describe('7. AI Agent Grounding & Deterministic Tools', () => {
-  it('POST /api/v1/ai/query handles "আজকের অবস্থা বলো" with factual data and actions', async () => {
+  it('POST /api/v1/ai/query handles "আজকের অবস্থা বলো" for admin with factual data and actions', async () => {
     const res = await request(app)
       .post('/api/v1/ai/query')
       .set('Authorization', `Bearer ${adminToken}`)
@@ -229,6 +323,17 @@ describe('7. AI Agent Grounding & Deterministic Tools', () => {
     expect(res.body.data.actions.length).toBeGreaterThan(0);
   });
 
+  it('POST /api/v1/ai/query hides financial metrics from teacher briefing', async () => {
+    const res = await request(app)
+      .post('/api/v1/ai/query')
+      .set('Authorization', `Bearer ${teacherToken}`)
+      .send({ query: 'আজকের অবস্থা বলো' });
+    expect(res.status).toBe(200);
+    expect(res.body.data.dataType).toBe('brief');
+    // Financial collection numbers must not appear in teacher daily briefing
+    expect(res.body.data.summaryBn).not.toContain('ফি আদায়');
+  });
+
   it('POST /api/v1/ai/query handles "বকেয়া ফি তালিকা দেখাও" with overdue invoice data', async () => {
     const res = await request(app)
       .post('/api/v1/ai/query')
@@ -237,6 +342,15 @@ describe('7. AI Agent Grounding & Deterministic Tools', () => {
     expect(res.status).toBe(200);
     expect(res.body.data.dataType).toBe('fees');
     expect(Array.isArray(res.body.data.data)).toBe(true);
+  });
+
+  it('POST /api/v1/ai/query returns personal student summary for student role', async () => {
+    const res = await request(app)
+      .post('/api/v1/ai/query')
+      .set('Authorization', `Bearer ${studentToken}`)
+      .send({ query: 'আমার উপস্থিতি ও সবক স্ট্যাটাস কেমন?' });
+    expect(res.status).toBe(200);
+    expect(res.body.data.summaryBn).toContain('আব্দুল্লাহ');
   });
 });
 
@@ -259,7 +373,7 @@ describe('8. Advanced Automation Engine & Approvals', () => {
     expect(res.body.data.dryRunPreview).toHaveProperty('safetyCheck');
   });
 
-  it('GET & POST /api/v1/automations/approvals decides pending approval', async () => {
+  it('GET & POST /api/v1/automations/approvals decides pending approval and blocks duplicate decisions', async () => {
     const pendingRes = await request(app)
       .get('/api/v1/automations/approvals/pending')
       .set('Authorization', `Bearer ${adminToken}`);
@@ -273,6 +387,14 @@ describe('8. Advanced Automation Engine & Approvals', () => {
       .send({ decision: 'approved', remarks: 'মুহতামিম কর্তৃক অনুমোদিত' });
     expect(decideRes.status).toBe(200);
     expect(decideRes.body.data.success).toBe(true);
+
+    // Duplicate decision must return 409 APPROVAL_ALREADY_DECIDED
+    const duplicateRes = await request(app)
+      .post(`/api/v1/automations/approvals/${targetAppr.id}/decide`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ decision: 'approved', remarks: 'পুনরায় অনুমোদন চেষ্টা' });
+    expect(duplicateRes.status).toBe(409);
+    expect(duplicateRes.body.error.code).toBe('APPROVAL_ALREADY_DECIDED');
   });
 });
 
@@ -293,6 +415,115 @@ describe('9. Public QR Certificate Verification', () => {
       .get(`/api/v1/public/verify-certificate/${certNum}`);
     expect(publicVerifyRes.status).toBe(200);
     expect(publicVerifyRes.body.data.isValid).toBe(true);
-    expect(publicVerifyRes.body.data.institutionNameBn).toContain('দারুল উলূম');
+    expect(publicVerifyRes.body.data.institutionNameBn).toBeTruthy();
+  });
+});
+
+describe('10. Kitab Progress & Academic Tracking', () => {
+  it('GET /api/v1/kitab/classes returns list of academic classes', async () => {
+    const res = await request(app)
+      .get('/api/v1/kitab/classes')
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.data)).toBe(true);
+    expect(res.body.data.length).toBeGreaterThan(0);
+  });
+
+  it('GET & POST /api/v1/kitab/progress manages Kitab completion and daily lessons', async () => {
+    const listRes = await request(app)
+      .get('/api/v1/kitab/progress?classId=cls_kafiya')
+      .set('Authorization', `Bearer ${teacherToken}`);
+    expect(listRes.status).toBe(200);
+    expect(Array.isArray(listRes.body.data)).toBe(true);
+    expect(listRes.body.data.length).toBeGreaterThan(0);
+
+    const postRes = await request(app)
+      .post('/api/v1/kitab/progress')
+      .set('Authorization', `Bearer ${teacherToken}`)
+      .send({
+        classId: 'cls_kafiya',
+        kitabName: 'কাফিয়া ও শরহে জামী',
+        subjectNameBn: 'আরবি ব্যাকরণ (নাহু)',
+        teacherNameBn: 'মাওলানা হারুনুর রশিদ',
+        babOrChapter: 'বাবুস সালাত',
+        lessonTitle: 'বাবুস সালাত ও তাহারাত অনুচ্ছেদ',
+        pagesCompleted: 55,
+        totalKitabPages: 220
+      });
+    expect(postRes.status).toBe(200);
+    expect(postRes.body.data.success).toBe(true);
+  });
+});
+
+describe('11. Admissions Pipeline', () => {
+  let createdAdmissionId: string;
+
+  it('POST /api/v1/admissions registers candidate application', async () => {
+    const res = await request(app)
+      .post('/api/v1/admissions')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        applicantNameBn: 'মুহাম্মদ হাবিবুর রহমান',
+        applicantNameEn: 'Muhammad Habibur Rahman',
+        guardianNameBn: 'মাওলানা আতিকুর রহমান',
+        guardianPhone: '01712349988',
+        targetDepartment: 'qawmi',
+        targetClassId: 'cls_nahbemir',
+        previousMadrasa: 'মাদ্রাসাতুল মদিনা',
+        notes: 'হিফজ সমাপ্তকারী'
+      });
+    expect(res.status).toBe(201);
+    expect(res.body.data).toHaveProperty('applicationNumber');
+    createdAdmissionId = res.body.data.id;
+  });
+
+  it('GET /api/v1/admissions returns applicant list for admin', async () => {
+    const res = await request(app)
+      .get('/api/v1/admissions')
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.data)).toBe(true);
+    expect(res.body.data.some((a: any) => a.id === createdAdmissionId)).toBe(true);
+  });
+
+  it('PUT /api/v1/admissions/:id/status logs interview score and approves admission', async () => {
+    const res = await request(app)
+      .put(`/api/v1/admissions/${createdAdmissionId}/status`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        status: 'approved',
+        score: 88,
+        notes: 'মৌখিক পরীক্ষায় চমৎকার ফলাফল করেছে।'
+      });
+    expect(res.status).toBe(200);
+    expect(res.body.data.success).toBe(true);
+  });
+});
+
+describe('12. Madrasa Library', () => {
+  it('GET /api/v1/library returns catalog of kitabs', async () => {
+    const res = await request(app)
+      .get('/api/v1/library')
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.data)).toBe(true);
+    expect(res.body.data.length).toBeGreaterThan(0);
+  });
+
+  it('POST /api/v1/library registers a new kitab into the catalog', async () => {
+    const res = await request(app)
+      .post('/api/v1/library')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        titleBn: 'আল-ফিকহুল আকবার',
+        titleAr: 'الفقه الأكبر',
+        author: 'ইমাম আবু হানিফা (রহ.)',
+        category: 'আকাইদ ও কালাম',
+        isbn: '978-984-01-0988-1',
+        totalCopies: 10
+      });
+    expect(res.status).toBe(201);
+    expect(res.body.data.success).toBe(true);
+    expect(res.body.data).toHaveProperty('id');
   });
 });

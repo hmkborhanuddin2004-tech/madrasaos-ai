@@ -29,8 +29,8 @@ export class StudentService {
     }
 
     if (params.classId) {
-      whereClause += ' AND s.class_id = ?';
-      queryParams.push(params.classId);
+      whereClause += ' AND (s.class_id = ? OR s.class_id IN (SELECT id FROM classes WHERE name_bn = (SELECT name_bn FROM classes WHERE id = ?)))';
+      queryParams.push(params.classId, params.classId);
     }
 
     if (params.isHifz !== undefined) {
@@ -185,9 +185,13 @@ export class StudentService {
     return this.getStudentById(tenantId, id);
   }
 
-  public async updateStudent(tenantId: string, studentId: string, payload: Partial<Student>): Promise<any> {
+  public async updateStudent(tenantId: string, studentId: string, payload: Partial<Student> & { avatar_url?: string; avatarUrl?: string; blood_group?: string; bloodGroup?: string; roll_number?: string }): Promise<any> {
     const existing = await this.getStudentById(tenantId, studentId);
     if (!existing) throw new Error('Student not found');
+
+    const avatarUrl = payload.avatarUrl !== undefined ? payload.avatarUrl : payload.avatar_url;
+    const bloodGroup = payload.bloodGroup !== undefined ? payload.bloodGroup : payload.blood_group;
+    const rollNumber = payload.rollNumber !== undefined ? payload.rollNumber : payload.roll_number;
 
     await db.run(
       `UPDATE students SET
@@ -201,13 +205,16 @@ export class StudentService {
         guardian_name_bn = COALESCE(?, guardian_name_bn),
         guardian_phone = COALESCE(?, guardian_phone),
         monthly_fee = COALESCE(?, monthly_fee),
-        address = COALESCE(?, address)
+        address = COALESCE(?, address),
+        avatar_url = COALESCE(?, avatar_url),
+        blood_group = COALESCE(?, blood_group)
        WHERE id = ? AND tenant_id = ?`,
       [
-        payload.fullNameBn, payload.fullNameEn, payload.classId, payload.rollNumber,
+        payload.fullNameBn, payload.fullNameEn, payload.classId, rollNumber,
         payload.section, payload.isResidential !== undefined ? (payload.isResidential ? 1 : 0) : null,
         payload.isHifzStudent !== undefined ? (payload.isHifzStudent ? 1 : 0) : null,
         payload.guardianNameBn, payload.guardianPhone, payload.monthlyFee, payload.address,
+        avatarUrl, bloodGroup,
         studentId, tenantId
       ]
     );

@@ -28,9 +28,43 @@ router.get('/', authenticate, async (req: AuthenticatedRequest, res: Response, n
       });
     }
 
+    // Student scope restriction: Students only see their own profile
+    if (req.user!.role === 'student') {
+      const linked = req.user!.linkedStudentIds || [];
+      if (linked.length === 0) {
+        return res.json({ success: true, data: { students: [], total: 0, page: 1, totalPages: 1 } });
+      }
+      const students = [];
+      for (const sid of linked) {
+        try {
+          const s = await studentService.getStudentById(req.user!.tenantId, sid);
+          students.push(s);
+        } catch {}
+      }
+      return res.json({
+        success: true,
+        data: { students, total: students.length, page: 1, totalPages: 1 }
+      });
+    }
+
+    // Teacher class assignment restriction: Teachers only view students in assigned classes
+    let targetClassId = classId as string | undefined;
+    if (req.user!.role === 'teacher' || req.user!.role === 'hifz_teacher') {
+      const assigned = req.user!.assignedClassIds || [];
+      if (targetClassId && !assigned.includes(targetClassId)) {
+        return res.status(403).json({
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'আপনার এই শ্রেণির শিক্ষার্থীদের তথ্য দেখার অনুমতি নেই।' }
+        });
+      }
+      if (!targetClassId && assigned.length > 0) {
+        targetClassId = assigned[0];
+      }
+    }
+
     const data = await studentService.getStudents(req.user!.tenantId, {
       search: search as string,
-      classId: classId as string,
+      classId: targetClassId,
       isHifz: isHifz !== undefined ? isHifz === 'true' : undefined,
       isResidential: isResidential !== undefined ? isResidential === 'true' : undefined,
       status: status as string,
@@ -59,8 +93,87 @@ router.get('/:id', authenticate, async (req: AuthenticatedRequest, res: Response
       }
     }
 
+    // Student access check: Ensure student can only access own profile
+    if (req.user!.role === 'student') {
+      const linked = req.user!.linkedStudentIds || [];
+      if (!linked.includes(studentId)) {
+        return res.status(403).json({
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'আপনি শুধুমাত্র আপনার নিজের প্রোফাইল দেখতে পারবেন।' }
+        });
+      }
+    }
+
     const data = await studentService.getStudentById(req.user!.tenantId, studentId);
     res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/:id/id-card', authenticate, async (req: AuthenticatedRequest, res: Response, next) => {
+  try {
+    const studentId = req.params.id as string;
+    
+    // Guardian access check
+    if (req.user!.role === 'guardian') {
+      const linked = req.user!.linkedStudentIds || [];
+      if (!linked.includes(studentId)) {
+        return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'Not allowed' } });
+      }
+    }
+    
+    // Student access check
+    if (req.user!.role === 'student') {
+      const linked = req.user!.linkedStudentIds || [];
+      if (!linked.includes(studentId)) {
+        return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'Not allowed' } });
+      }
+    }
+
+    const { SettingsService } = await import('../services/settingsService.js');
+    const settingsService = new SettingsService();
+
+    const studentData = await studentService.getStudentById(req.user!.tenantId, studentId);
+    const instSettings = await settingsService.ensureSettings(req.user!.tenantId);
+
+    const { generateVerificationQr } = await import('../utils/qrCodeUtils.js');
+    const qrDataUrl = await generateVerificationQr('student', studentData.student_id_number || studentData.id, req.user!.tenantId);
+
+    res.json({
+      ok: true,
+      data: {
+        student: {
+          id: studentData.id,
+          name: studentData.full_name_bn,
+          name_en: studentData.full_name_en,
+          code: studentData.student_id_number,
+          roll: studentData.roll_number,
+          class_name: studentData.class_name_bn,
+          session_year: studentData.academic_year || '2024-25',
+          department: studentData.department_name_bn,
+          is_residential: studentData.is_residential,
+          avatar_url: studentData.avatar_url,
+          blood_group: studentData.blood_group
+        },
+        guardian: {
+          name: studentData.guardian_name_bn,
+          phone: studentData.guardian_phone,
+          relation: studentData.guardian_relation
+        },
+        institution: {
+          name_bn: instSettings.name_bn || 'দারুল উলূম তারবিয়াতুল উম্মাহ মাদ্রাসা',
+          name_en: instSettings.name_en || 'TARBIATUL UMMAH MADRASAH',
+          name_ar: instSettings.name_ar || 'مَدْرَسَةُ دَارِ الْعُلُومِ تَرْبِيَةِ الأُمَّةِ',
+          address: instSettings.address || 'Road No-01, Shanthidhara R/A, Signboard, Narayanganj',
+          phone: instSettings.phone || '01602-323426, 01833-400121, 01707-371560',
+          logo_url: instSettings.logo_url || '',
+          principal_name: instSettings.principal_name || 'মুহতামিম'
+        },
+        qr_url: `/api/v1/qr/student/${studentData.student_id_number}?format=image`,
+        qr_data_url: qrDataUrl
+      }
+    });
   } catch (err) {
     next(err);
   }

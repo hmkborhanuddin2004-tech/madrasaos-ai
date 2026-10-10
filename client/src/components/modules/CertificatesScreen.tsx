@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { useSettings } from '../../context/SettingsContext';
 import { Award, Printer, CheckCircle2, QrCode, FileText } from 'lucide-react';
 
 export const CertificatesScreen: React.FC = () => {
   const { apiCall } = useAuth();
+  const { settings, getDesignationLabel } = useSettings();
   const [studentId, setStudentId] = useState('std_001');
   const [certType, setCertType] = useState<'student_certificate' | 'transfer_certificate' | 'hifz_sanad'>('student_certificate');
   const [certificateData, setCertificateData] = useState<any>(null);
@@ -89,8 +91,12 @@ export const CertificatesScreen: React.FC = () => {
           {/* Header */}
           <div className="text-center space-y-1 relative">
             <div className="font-arabic text-emerald-800 text-sm">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</div>
-            <h1 className="text-xl font-bold text-primary-950 font-bangla">দারুল উলূম সেন্ট্রাল মাদ্রাসা, ঢাকা</h1>
-            <div className="text-xs text-slate-600">প্লট ১৪, সেকশন ৬, মিরপুর, ঢাকা-১২১৬ • ফোন: 01711111111</div>
+            <h1 className="text-xl font-bold text-primary-950 font-bangla">
+              {settings.nameBn || certificateData?.metadata?.institutionNameBn || 'মাদ্রাসা'}
+            </h1>
+            <div className="text-xs text-slate-600">
+              {settings.address || 'ঢাকা'} • ফোন: {settings.phone || '০১৭১১১১১১১১'}
+            </div>
             <div className="inline-block bg-emerald-100 text-emerald-900 text-xs font-bold px-4 py-1 rounded-full mt-2 border border-emerald-300">
               {certType === 'hifz_sanad'
                 ? 'হিফজুল কুরআন সমাপনী সনদপত্র'
@@ -135,8 +141,8 @@ export const CertificatesScreen: React.FC = () => {
             {/* Signature Area */}
             <div className="text-center space-y-1">
               <div className="w-36 border-b border-slate-700 mx-auto"></div>
-              <div className="font-bold text-xs text-slate-900">মুহতামিম / অধ্যক্ষ</div>
-              <div className="text-[10px] text-slate-500">দারুল উলূম সেন্ট্রাল মাদ্রাসা</div>
+              <div className="font-bold text-xs text-slate-900">{getDesignationLabel('muhtamim') || 'মুহতামিম / অধ্যক্ষ'}</div>
+              <div className="text-[10px] text-slate-500">{settings.nameBn || 'মাদ্রাসা'}</div>
             </div>
           </div>
 

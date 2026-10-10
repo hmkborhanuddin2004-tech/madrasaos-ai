@@ -87,3 +87,5 @@ export function requireRole(...allowedRoles: UserRoleCode[]) {
     });
   };
 }
+
+export const authorize = requireRole;

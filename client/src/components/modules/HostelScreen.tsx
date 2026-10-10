@@ -6,9 +6,10 @@ export const HostelScreen: React.FC = () => {
   const { apiCall } = useAuth();
   const [hostelData, setHostelData] = useState<any>(null);
   const [showOutpassModal, setShowOutpassModal] = useState(false);
-  const [studentId, setStudentId] = useState('std_001');
+  const [studentId, setStudentId] = useState('');
   const [reason, setReason] = useState('পারিবারিক ছুটি');
   const [returnTime, setReturnTime] = useState('2026-09-22 18:00');
+  const [residentialStudents, setResidentialStudents] = useState<any[]>([]);
 
   const fetchHostel = async () => {
     try {
@@ -19,8 +20,22 @@ export const HostelScreen: React.FC = () => {
     }
   };
 
+  const fetchResidentialStudents = async () => {
+    try {
+      const res = await apiCall('/api/v1/students?isResidential=true&limit=100');
+      const list = res?.students || res || [];
+      setResidentialStudents(list);
+      if (list.length > 0) {
+        setStudentId(list[0].id);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   useEffect(() => {
     fetchHostel();
+    fetchResidentialStudents();
   }, []);
 
   const handleIssueOutpass = async (e: React.FormEvent) => {
@@ -152,10 +167,20 @@ export const HostelScreen: React.FC = () => {
                 <select
                   value={studentId}
                   onChange={(e) => setStudentId(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-xl"
+                  className="w-full px-3 py-2 border rounded-xl font-medium"
                 >
-                  <option value="std_001">আব্দুল্লাহ আল-মামুন (রুম ১০১)</option>
-                  <option value="std_002">মুহাম্মদ ফারুক (রুম ১০১)</option>
+                  {residentialStudents.length > 0 ? (
+                    residentialStudents.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.full_name_bn} ({s.class_name_bn || 'আবাসিক'} - রোল: {s.roll_number})
+                      </option>
+                    ))
+                  ) : (
+                    <>
+                      <option value="std_001">আব্দুল্লাহ আল-মামুন (রুম ১০১)</option>
+                      <option value="std_002">মুহাম্মদ ফারুক (রুম ১০১)</option>
+                    </>
+                  )}
                 </select>
               </div>
 

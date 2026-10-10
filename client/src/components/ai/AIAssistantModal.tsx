@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { Sparkles, X, Send, Bot, User, ArrowRight, CheckCircle2, AlertCircle, Database } from 'lucide-react';
+import { Sparkles, X, Send, Bot, User, ArrowRight, ArrowLeft, CheckCircle2, AlertCircle, Database } from 'lucide-react';
+import { VoiceInputButton } from '../common/VoiceInputButton';
 
 interface AIAssistantModalProps {
   isOpen: boolean;
@@ -70,22 +71,31 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({ isOpen, onCl
     <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
       <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col h-[85vh] animate-in fade-in zoom-in-95 duration-150">
         {/* Header */}
-        <div className="bg-gradient-to-r from-emerald-900 via-primary-900 to-slate-900 p-4 text-white flex items-center justify-between border-b border-primary-800">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-accent-gold to-amber-600 flex items-center justify-center shadow-inner font-bold text-white">
-              <Sparkles className="w-5 h-5" />
+        <div className="bg-gradient-to-r from-emerald-900 via-primary-900 to-slate-900 p-3 sm:p-4 text-white flex items-center justify-between border-b border-primary-800">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex items-center gap-1 text-xs font-bold text-emerald-100 hover:text-white bg-emerald-800/80 hover:bg-emerald-700 px-2.5 py-1.5 rounded-xl transition border border-emerald-600/50 cursor-pointer shadow-xs active:scale-95"
+              title="পেছনে ফিরে যান (Back)"
+            >
+              <ArrowLeft className="w-4 h-4 text-emerald-300" />
+              <span className="hidden sm:inline">পেছনে যান</span>
+            </button>
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-2xl bg-gradient-to-br from-accent-gold to-amber-600 flex items-center justify-center shadow-inner font-bold text-white flex-shrink-0">
+              <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <div>
-              <div className="font-bold text-sm flex items-center gap-2">
-                <span>মাদ্রাসাOS এআই অপারেটিং সহকারী</span>
-                <span className="text-[10px] bg-emerald-700/80 text-emerald-200 px-1.5 py-0.2 rounded font-semibold border border-emerald-500/30">
+              <div className="font-bold text-xs sm:text-sm flex items-center gap-2">
+                <span>মাদ্রাসাOS এআই সহকারী</span>
+                <span className="text-[9px] bg-emerald-700/80 text-emerald-200 px-1.5 py-0.2 rounded font-semibold border border-emerald-500/30">
                   জিরো হ্যালুসিনেশন
                 </span>
               </div>
-              <div className="text-[11px] text-emerald-300/80">সরাসরি ডাটাবেজ টুল ও পারমিশন ভিত্তিক সিদ্ধান্ত</div>
+              <div className="text-[10px] sm:text-[11px] text-emerald-300/80">সরাসরি ডাটাবেজ টুল ও পারমিশন ভিত্তিক সিদ্ধান্ত</div>
             </div>
           </div>
-          <button onClick={onClose} className="text-emerald-200 hover:text-white p-1 rounded-lg">
+          <button onClick={onClose} className="text-emerald-200 hover:text-white p-1.5 rounded-lg hover:bg-emerald-800/50 transition cursor-pointer">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -173,11 +183,12 @@ export const AIAssistantModal: React.FC<AIAssistantModalProps> = ({ isOpen, onCl
           >
             <input
               type="text"
-              placeholder="বাংলা বা ইংরেজিতে আপনার প্রশ্ন বা নির্দেশ লিখুন..."
+              placeholder="বাংলা বা ইংরেজিতে আপনার প্রশ্ন বা নির্দেশ লিখুন অথবা মুখে বলুন..."
               value={input}
               onChange={(e) => setInput(e.target.value)}
               className="flex-1 px-4 py-2.5 text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-600 text-slate-800 dark:text-slate-100"
             />
+            <VoiceInputButton onTranscript={(txt) => setInput((prev) => prev ? `${prev} ${txt}` : txt)} />
             <button
               type="submit"
               disabled={isLoading || !input.trim()}

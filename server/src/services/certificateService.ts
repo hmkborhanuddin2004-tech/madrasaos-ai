@@ -22,6 +22,15 @@ export class CertificateService {
     const now = new Date().toISOString().split('T')[0];
     const qrVerificationUrl = `/verify-certificate/${certNumber}`;
 
+    const instRow = await db.get<any>(
+      `SELECT s.name_bn FROM institution_settings s WHERE s.tenant_id = ?
+       UNION
+       SELECT i.name_bn FROM institutions i WHERE i.id = ?
+       LIMIT 1`,
+      [tenantId, tenantId]
+    );
+    const institutionNameBn = instRow?.name_bn || 'জামিয়া ইসলামিয়া মডেল মাদ্রাসা';
+
     const metadata = {
       studentNameBn: student.full_name_bn,
       studentNameEn: student.full_name_en,
@@ -30,7 +39,7 @@ export class CertificateService {
       department: student.department_name_bn,
       guardianNameBn: student.guardian_name_bn,
       issueDate: now,
-      institutionNameBn: 'দারুল উলূম সেন্ট্রাল মাদ্রাসা, ঢাকা'
+      institutionNameBn
     };
 
     await db.run(

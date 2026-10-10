@@ -11,6 +11,8 @@ export interface AIAgentContext {
   tenantId: string;
   role: UserRoleCode;
   fullNameBn: string;
+  linkedStudentIds?: string[];
+  assignedClassIds?: string[];
 }
 
 export class AIAgentService {
@@ -20,9 +22,18 @@ export class AIAgentService {
     const isTeacher = context.role === 'teacher' || context.role === 'hifz_teacher';
     const isAccountant = context.role === 'accountant';
     const isAdmin = context.role === 'madrasa_admin' || context.role === 'super_admin' || context.role === 'principal';
+    const isGuardianOrStudent = context.role === 'guardian' || context.role === 'student';
 
-    if ((toolName === 'getFeeSummary' || toolName === 'getOverdueFees') && isTeacher) {
-      return { success: false, error: 'উস্তাদগণের জন্য আর্থিক ডাটাবেজ অ্যাক্সেস সংরক্ষিত নয়।' };
+    if (isGuardianOrStudent) {
+      return { success: false, error: 'প্রাতিষ্ঠানিক ডাটাবেজ টুল ব্যবহারের অনুমতি শুধুমাত্র দায়িত্বশীল শিক্ষক ও প্রশাসনের জন্য সংরক্ষিত।' };
+    }
+
+    const FINANCIAL_TOOLS = new Set([
+      'getFeeSummary', 'getOverdueFees', 'getFundSummary',
+      'getPayroll', 'getDonations', 'getCashBook', 'getSalary', 'getRevenue',
+    ]);
+    if (FINANCIAL_TOOLS.has(toolName) && isTeacher) {
+      return { success: false, error: 'উস্তাদগণের জন্য আর্থিক ডাটাবেজ অ্যাক্সেস সংরক্ষিত নয়।' };
     }
 
     if ((toolName === 'getHifzProgress' || toolName === 'getDecliningHifzStudents') && isAccountant) {
@@ -33,7 +44,7 @@ export class AIAgentService {
       switch (toolName) {
         case 'getDailyBriefing': {
           const att = await attendanceService.getTodaySummary(context.tenantId);
-          const fin = await financeService.getSummary(context.tenantId);
+          const fin = isTeacher ? null : await financeService.getSummary(context.tenantId);
           const hifzAlerts = await hifzService.getDecliningAlerts(context.tenantId);
           const repeatedAbsences = await attendanceService.getRepeatedAbsences(context.tenantId, 7, 2);
           const hostel = await hostelService.getHostelStatus(context.tenantId);
@@ -100,6 +111,44 @@ export class AIAgentService {
   public async processQuery(query: string, context: AIAgentContext): Promise<AIAgentResponse> {
     const q = query.toLowerCase().trim();
 
+    // Guardian and Student: Always provide personalized, scoped information about own linked student
+    if (context.role === 'guardian' || context.role === 'student') {
+      const studentId = context.linkedStudentIds?.[0];
+      if (!studentId) {
+        return {
+          summaryBn: `আসসালামু আলাইকুম ${context.fullNameBn}। আপনার অ্যাকাউন্টের সাথে কোনো শিক্ষার্থীর প্রোফাইল সংযুক্ত পাওয়া যায়নি।`,
+          dataType: 'general',
+          sources: ['system'],
+          actions: []
+        };
+      }
+
+      const st = await studentService.getStudentById(context.tenantId, studentId);
+      const isGuardian = context.role === 'guardian';
+      const attRate = st.attendanceStats?.rate ?? 100;
+      const recentSabaq = st.recentHifz?.[0]
+        ? `${st.recentHifz[0].sabaq_surah} (পৃষ্ঠা: ${st.recentHifz[0].sabaq_pages}, রেটিং: ${st.recentHifz[0].sabaq_rating})`
+        : 'সবক পাঠ নিয়মিত';
+      const dueAmt = st.feeInvoices?.[0]?.due_amount || 0;
+      const feeStatus = dueAmt > 0 ? `বকেয়া ফি ৳${dueAmt.toLocaleString()}` : 'সকল ফি পরিশোধিত';
+
+      const summaryBn = isGuardian
+        ? `আসসালামু আলাইকুম ${context.fullNameBn}। আপনার সন্তান "${st.full_name_bn}" এর সর্বশেষ তথ্য: ক্লাসে উপস্থিতির হার ${attRate}%, হিফজ সবক: ${recentSabaq}, এবং বেতন স্ট্যাটাস: ${feeStatus}।`
+        : `আসসালামু আলাইকুম ${st.full_name_bn}। তোমার বর্তমান তথ্য: উপস্থিতির হার ${attRate}%, হিফজ সবক: ${recentSabaq}, এবং বেতন স্ট্যাটাস: ${feeStatus}।`;
+
+      return {
+        summaryBn,
+        dataType: 'students',
+        data: st,
+        sources: ['students', 'attendance_records', 'hifz_records', 'fee_invoices'],
+        actions: [
+          { labelBn: 'হাজিরা রেকর্ড', labelEn: 'Attendance Record', actionType: 'navigate', payload: { route: '/attendance' } },
+          { labelBn: 'হিফজ অগ্রগতি', labelEn: 'Hifz Progress', actionType: 'navigate', payload: { route: '/hifz' } },
+          { labelBn: 'বেতন ও ফি হিসাব', labelEn: 'Fees', actionType: 'navigate', payload: { route: '/finance' } }
+        ]
+      };
+    }
+
     // 1. Daily Briefing / Overall status
     if (
       q.includes('আজকের অবস্থা') ||
@@ -110,7 +159,36 @@ export class AIAgentService {
       q.includes('today status')
     ) {
       const toolRes = await this.executeTool('getDailyBriefing', {}, context);
-      const b = toolRes.data;
+      const b = toolRes.data || {
+        date: new Date().toISOString().split('T')[0],
+        attendance: { totalStudents: 0, presentCount: 0, attendanceRate: 0, absentCount: 0, lateCount: 0 },
+        finance: { totalCollected: 0, todayCollection: 0 },
+        repeatedAbsenceCount: 0,
+        hostelOccupancy: '০/০ সিট পূর্ণ'
+      };
+      if (!b.attendance) {
+        b.attendance = { totalStudents: 0, presentCount: 0, attendanceRate: 0, absentCount: 0, lateCount: 0 };
+      }
+      if (!b.finance) {
+        b.finance = { totalCollected: 0, todayCollection: 0 };
+      }
+
+      // Teachers receive non-financial daily briefing
+      if (context.role === 'teacher' || context.role === 'hifz_teacher') {
+        const summaryBn = `আজ মোট ${b.attendance.totalStudents} জন শিক্ষার্থীর মধ্যে ${b.attendance.presentCount} জন উপস্থিত (${b.attendance.attendanceRate}%)। ${b.attendance.absentCount} জন অনুপস্থিত, যার মধ্যে ${b.repeatedAbsenceCount} জন গত ৭ দিনে একাধিকবার অনুপস্থিত হয়েছে। ছাত্রাবাস পরিস্থিতি: ${b.hostelOccupancy}।`;
+        return {
+          summaryBn,
+          dataType: 'brief',
+          data: b,
+          sources: ['attendance_records', 'hifz_records', 'hostel_rooms'],
+          actions: [
+            { labelBn: 'হাজিরা বিস্তারিত', labelEn: 'View Attendance', actionType: 'navigate', payload: { route: '/attendance' } },
+            { labelBn: 'পুনরাবৃত্ত অনুপস্থিতি তালিকা', labelEn: 'View Repeated Absence', actionType: 'navigate', payload: { route: '/attendance/repeated' } },
+            { labelBn: 'হিফজ সবক খাতা', labelEn: 'Hifz Workspace', actionType: 'navigate', payload: { route: '/hifz' } }
+          ]
+        };
+      }
+
       const summaryBn = `আজ মোট ${b.attendance.totalStudents} জন শিক্ষার্থীর মধ্যে ${b.attendance.presentCount} জন উপস্থিত (${b.attendance.attendanceRate}%)। ${b.attendance.absentCount} জন অনুপস্থিত, যার মধ্যে ${b.repeatedAbsenceCount} জন গত ৭ দিনে একাধিকবার অনুপস্থিত হয়েছে। চলতি মাসে মোট ৳${b.finance.totalCollected.toLocaleString()} ফি আদায় হয়েছে এবং আজ ৳${b.finance.todayCollection.toLocaleString()} জমা হয়েছে।`;
 
       return {

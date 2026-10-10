@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { BookOpen, Award, CheckCircle2, AlertTriangle, Save, Check, TrendingUp, Sparkles } from 'lucide-react';
 
+import { VoiceInputButton } from '../common/VoiceInputButton';
+
 export const HifzScreen: React.FC = () => {
   const { apiCall } = useAuth();
   const [workspace, setWorkspace] = useState<any>(null);
@@ -163,10 +165,39 @@ export const HifzScreen: React.FC = () => {
                     </span>
                   </div>
                 </div>
+
+                {/* Voice Teacher Note */}
+                <div className="mt-2.5 flex items-center gap-1.5">
+                  <input
+                    type="text"
+                    placeholder="উস্তাদের মৌখিক/লিখিত মন্তব্য..."
+                    value={s.teacherNotes || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setStudents((prev) =>
+                        prev.map((item) =>
+                          item.studentId === s.studentId ? { ...item, teacherNotes: val } : item
+                        )
+                      );
+                    }}
+                    className="flex-1 px-2.5 py-1 text-[11px] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                  <VoiceInputButton
+                    onTranscript={(txt) => {
+                      setStudents((prev) =>
+                        prev.map((item) =>
+                          item.studentId === s.studentId
+                            ? { ...item, teacherNotes: item.teacherNotes ? `${item.teacherNotes} ${txt}` : txt }
+                            : item
+                        )
+                      );
+                    }}
+                  />
+                </div>
               </div>
 
               {/* Fast 1-Tap Evaluation Buttons */}
-              <div className="mt-4 pt-3 border-t border-slate-100">
+              <div className="mt-3 pt-2.5 border-t border-slate-100">
                 <div className="text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-wider">
                   মূল্যায়ন রেটিং নির্বাচন করুন:
                 </div>

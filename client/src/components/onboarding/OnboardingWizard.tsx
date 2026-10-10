@@ -11,7 +11,8 @@ interface OnboardingWizardProps {
 export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ isOpen, onClose, onComplete }) => {
   const { apiCall } = useAuth();
   const [step, setStep] = useState(1);
-  const [selectedModels, setSelectedModels] = useState<string[]>(['qawmi', 'hifz', 'boarding']);
+  const [primaryStream, setPrimaryStream] = useState<'qawmi' | 'alia' | 'general'>('qawmi');
+  const [selectedFeatures, setSelectedFeatures] = useState<string[]>(['hifz', 'boarding']);
   const [selectedJamaats, setSelectedJamaats] = useState<string[]>([
     'নাহবেমীর', 'হেদায়াতুন্নাহু', 'কাফিয়া', 'মিশকাতুল মাসাবীহ', 'দাওরায়ে হাদীস'
   ]);
@@ -21,11 +22,11 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ isOpen, onCl
 
   if (!isOpen) return null;
 
-  const toggleModel = (id: string) => {
-    if (selectedModels.includes(id)) {
-      setSelectedModels(selectedModels.filter((m) => m !== id));
+  const toggleFeature = (id: string) => {
+    if (selectedFeatures.includes(id)) {
+      setSelectedFeatures(selectedFeatures.filter((m) => m !== id));
     } else {
-      setSelectedModels([...selectedModels, id]);
+      setSelectedFeatures([...selectedFeatures, id]);
     }
   };
 
@@ -40,13 +41,16 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ isOpen, onCl
   const handleFinalize = async () => {
     setIsSubmitting(true);
     try {
+      const allModels = [primaryStream, ...selectedFeatures];
       await apiCall('/api/v1/onboarding/step', {
         method: 'POST',
         body: JSON.stringify({
           step: 2,
           answers: {
-            models: selectedModels,
-            qawmiJamaats: selectedJamaats,
+            models: allModels,
+            primaryStream,
+            features: selectedFeatures,
+            qawmiJamaats: primaryStream === 'qawmi' ? selectedJamaats : [],
             hifzTrackingMethod: hifzMethod,
             hostelCapacity
           }
@@ -61,11 +65,13 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ isOpen, onCl
       onClose();
     } catch (err) {
       console.error('Failed to finalize onboarding:', err);
+      onComplete();
       onClose();
     } finally {
       setIsSubmitting(false);
     }
   };
+
 
   const progressPercent = step === 1 ? 35 : step === 2 ? 75 : 100;
 
@@ -110,45 +116,92 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ isOpen, onCl
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                {[
-                  { id: 'qawmi', title: 'কওমী মাদ্রাসা শিক্ষা', desc: 'নাহবেমীর, কাফিয়া, মিশকাত, দাওরায়ে হাদীস', icon: BookOpen },
-                  { id: 'hifz', title: 'হিফজুল কুরআন বিভাগ', desc: 'সবক, সবকী, মঞ্জিল ও প্যারা ট্র্যাকিং', icon: GraduationCap },
-                  { id: 'boarding', title: 'আবাসিক ছাত্রাবাস', desc: 'হোস্টেল রুম, বেড বরাদ্দ ও খানা হিসাব', icon: Bed },
-                  { id: 'alia', title: 'আলিয়া মাদ্রাসা কারিকুলাম', desc: 'দাখিল, আলিম ও বোর্ড সম্পর্কিত শ্রেণি', icon: Building }
-                ].map((item) => {
-                  const isChecked = selectedModels.includes(item.id);
-                  const Icon = item.icon;
-                  return (
-                    <div
-                      key={item.id}
-                      onClick={() => toggleModel(item.id)}
-                      className={`p-4 rounded-2xl border cursor-pointer transition flex items-start gap-3 ${
-                        isChecked
-                          ? 'border-emerald-600 bg-emerald-50/70 dark:bg-emerald-950/30'
-                          : 'border-slate-200 hover:border-slate-300 bg-white dark:bg-slate-800'
-                      }`}
-                    >
+              {/* Category 1: Main Stream (Radio Selection) */}
+              <div>
+                <label className="block text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider mb-2">
+                  ১. মূল শিক্ষা ধারা (একটি নির্বাচন করুন):
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {[
+                    { id: 'qawmi', title: 'কওমী মাদ্রাসা শিক্ষা', desc: 'নাহবেমীর, কাফিয়া, মিশকাত, দাওরায়ে হাদীস', icon: BookOpen },
+                    { id: 'alia', title: 'আলিয়া মাদ্রাসা কারিকুলাম', desc: 'ইবতেদায়ী, দাখিল, আলিম ও কামিল বোর্ড নেসাব', icon: Building }
+                  ].map((item) => {
+                    const isSelected = primaryStream === item.id;
+                    const Icon = item.icon;
+                    return (
                       <div
-                        className={`w-5 h-5 rounded-lg flex items-center justify-center mt-0.5 flex-shrink-0 ${
-                          isChecked ? 'bg-emerald-600 text-white' : 'border border-slate-300'
+                        key={item.id}
+                        onClick={() => setPrimaryStream(item.id as any)}
+                        className={`p-4 rounded-2xl border-2 cursor-pointer transition flex items-start gap-3 ${
+                          isSelected
+                            ? 'border-emerald-600 bg-emerald-50/80 dark:bg-emerald-950/40 shadow-xs'
+                            : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 bg-white dark:bg-slate-800'
                         }`}
                       >
-                        {isChecked && <Check className="w-3.5 h-3.5" />}
-                      </div>
-                      <div>
-                        <div className="font-bold text-xs text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
-                          <Icon className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>{item.title}</span>
+                        <div
+                          className={`w-5 h-5 rounded-full flex items-center justify-center mt-0.5 flex-shrink-0 border-2 ${
+                            isSelected ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-300 dark:border-slate-600'
+                          }`}
+                        >
+                          {isSelected && <div className="w-2 h-2 rounded-full bg-white"></div>}
                         </div>
-                        <div className="text-[11px] text-slate-500 mt-1 leading-snug">{item.desc}</div>
+                        <div>
+                          <div className="font-bold text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
+                            <Icon className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>{item.title}</span>
+                          </div>
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">{item.desc}</div>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Category 2: Facilities & Special Departments (Multi-Select Checkboxes) */}
+              <div>
+                <label className="block text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider mb-2">
+                  ২. বিশেষ বিভাগ ও প্রাতিষ্ঠানিক সুবিধা (প্রযোজ্য ক্ষেত্রে টিক দিন):
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {[
+                    { id: 'hifz', title: 'হিফজুল কুরআন বিভাগ', desc: 'সবক, সবকী, মঞ্জিল ও পারা ট্র্যাকিং খাতা', icon: GraduationCap },
+                    { id: 'boarding', title: 'আবাসিক ছাত্রাবাস', desc: 'হোস্টেল রুম, বেড বরাদ্দ ও দৈনিক খানা হিসাব', icon: Bed }
+                  ].map((item) => {
+                    const isChecked = selectedFeatures.includes(item.id);
+                    const Icon = item.icon;
+                    return (
+                      <div
+                        key={item.id}
+                        onClick={() => toggleFeature(item.id)}
+                        className={`p-4 rounded-2xl border cursor-pointer transition flex items-start gap-3 ${
+                          isChecked
+                            ? 'border-emerald-600 bg-emerald-50/70 dark:bg-emerald-950/30 shadow-2xs'
+                            : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 bg-white dark:bg-slate-800'
+                        }`}
+                      >
+                        <div
+                          className={`w-5 h-5 rounded-lg flex items-center justify-center mt-0.5 flex-shrink-0 ${
+                            isChecked ? 'bg-emerald-600 text-white' : 'border border-slate-300 dark:border-slate-600'
+                          }`}
+                        >
+                          {isChecked && <Check className="w-3.5 h-3.5" />}
+                        </div>
+                        <div>
+                          <div className="font-bold text-xs text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                            <Icon className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>{item.title}</span>
+                          </div>
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">{item.desc}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           )}
+
 
           {step === 2 && (
             <div className="space-y-5">
@@ -194,7 +247,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ isOpen, onCl
                       }`}
                     >
                       <div>সবক + সবকী + মঞ্জিল (প্রস্তাবিত)</div>
-                      <div className="text-[10px] font-normal text-slate-500 mt-1">পূর্ণাঙ্গ প্যারাহ ও ভুল ট্র্যাকিং</div>
+                      <div className="text-[10px] font-normal text-slate-500 mt-1">পূর্ণাঙ্গ পারা ও ভুল ট্র্যাকিং</div>
                     </button>
                     <button
                       onClick={() => setHifzMethod('daily_sabaq_only')}

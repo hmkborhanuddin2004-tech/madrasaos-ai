@@ -5,7 +5,7 @@ import { logAudit } from '../middleware/audit.js';
 
 const router = Router();
 
-router.get('/', authenticate, async (req: AuthenticatedRequest, res: Response, next) => {
+router.get('/', authenticate, requireRole('super_admin', 'madrasa_admin', 'principal'), async (req: AuthenticatedRequest, res: Response, next) => {
   try {
     const { status } = req.query;
     const data = await admissionService.getApplications(req.user!.tenantId, status as string);

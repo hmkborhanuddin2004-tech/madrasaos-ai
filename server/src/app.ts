@@ -3,6 +3,8 @@ import cors from 'cors';
 import routes from './routes/index.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
+import path from 'path';
+
 export const app = express();
 
 app.use(cors({
@@ -13,6 +15,9 @@ app.use(cors({
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Static uploads directory for institution logos and media
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 // Health Check
 app.get('/health', (req, res) => {

@@ -1,0 +1,42 @@
+{
+  "name": "MadrasaOS AI - মাদ্রাসা ম্যানেজমেন্ট প্ল্যাটফর্ম",
+  "short_name": "MadrasaOS",
+  "description": "বাংলাদেশ মাদ্রাসা ও স্কুলের সম্পূর্ণ ডিজিটাল সমাধান - অ্যাটেনডেন্স, অ্যাকাউন্টিং, রেজাল্ট, মুহাসাবা, এসএমএস",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f0fdf4",
+  "theme_color": "#16a34a",
+  "icons": [
+    {
+      "src": "/icons/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["education", "productivity", "management"],
+  "shortcuts": [
+    {
+      "name": "ডিজিটাল হাজিরা",
+      "url": "/?tab=attendance",
+      "description": "দ্রুত শিক্ষার্থী হাজিরা গ্রহণ করুন"
+    },
+    {
+      "name": "ক্যাশ বুক ও হিসাব",
+      "url": "/?tab=cash_book",
+      "description": "দৈনিক ক্যাশ বই ও হিসাব দেখুন"
+    },
+    {
+      "name": "মুহাসাবা ও আমল",
+      "url": "/?tab=muhasaba",
+      "description": "দৈনিক নামায ও আমল ট্র্যাক করুন"
+    }
+  ]
+}

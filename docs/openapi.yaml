@@ -1,0 +1,356 @@
+openapi: 3.1.0
+info:
+  title: MadrasaOS AI API
+  description: Multi-tenant Madrasa Management & Educational Engine for Bangladesh
+  version: 3.0.0
+servers:
+  - url: https://api.madrasaos.ai/api/v1
+    description: Production Cluster
+  - url: http://localhost:5000/api/v1
+    description: Local Development Server
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Unique UUID key to prevent duplicate POST execution.
+    TenantIdHeader:
+      name: X-Tenant-ID
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Contextual tenant identifier for multi-tenant requests.
+  schemas:
+    ProblemDetails:
+      type: object
+      required:
+        - type
+        - title
+        - status
+        - code
+        - detail
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        code:
+          type: string
+        detail:
+          type: string
+        instance:
+          type: string
+        invalidParams:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+
+paths:
+  /auth/login:
+    post:
+      summary: User Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identifier, password]
+              properties:
+                identifier:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Successful authentication
+        '401':
+          $ref: '#/components/schemas/ProblemDetails'
+
+  /auth/refresh:
+    post:
+      summary: Rotate and refresh JWT access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        '200':
+          description: Token rotated
+        '401':
+          description: Invalid token or reuse detected
+
+  /auth/break-glass:
+    post:
+      summary: Super Admin Emergency Break-Glass Access
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tenantId, reason, mfaToken]
+              properties:
+                tenantId:
+                  type: string
+                reason:
+                  type: string
+                  minLength: 20
+                mfaToken:
+                  type: string
+      responses:
+        '200':
+          description: Ephemeral break-glass token issued; audit log & notification dispatched.
+
+  /students:
+    get:
+      summary: List students with cursor pagination
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: cursor
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 25
+      responses:
+        '200':
+          description: Paginated students list
+
+    post:
+      summary: Enroll a student
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Student created
+
+  /students/{id}:
+    get:
+      summary: Fetch single student profile
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Student profile
+
+    delete:
+      summary: Soft-delete student record
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Student soft deleted
+
+  /hifz/progress:
+    post:
+      summary: Log daily Hifz progress (Sabak, Sabki, Amukhta, Dour)
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [studentId, date]
+              properties:
+                studentId:
+                  type: string
+                date:
+                  type: string
+                  format: date
+                sabakPara:
+                  type: integer
+                sabakPage:
+                  type: integer
+                sabakMistakes:
+                  type: integer
+                sabkiParaFrom:
+                  type: integer
+                sabkiParaTo:
+                  type: integer
+                amukhtaParaFrom:
+                  type: integer
+                amukhtaParaTo:
+                  type: integer
+                dourParaFrom:
+                  type: integer
+                dourParaTo:
+                  type: integer
+                clientUuid:
+                  type: string
+                  format: uuid
+      responses:
+        '201':
+          description: Progress recorded
+        '409':
+          description: Conflict across different teachers on the same date
+
+  /hifz/conflicts:
+    get:
+      summary: View pending offline/cross-teacher Hifz conflicts
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Conflict list
+
+  /academic/routine/publish:
+    post:
+      summary: Publish Timetable version
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Routine version snapshot created and published
+
+  /exams/{id}/marks:
+    post:
+      summary: Batch mark entry with keyboard-first bounds validation
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [classId, marksList]
+              properties:
+                classId:
+                  type: string
+                marksList:
+                  type: array
+                  items:
+                    type: object
+                    required: [studentId, subjectNameBn, obtained]
+                    properties:
+                      studentId:
+                        type: string
+                      subjectNameBn:
+                        type: string
+                      obtained:
+                        type: number
+                        minimum: 0
+                        maximum: 100
+      responses:
+        '200':
+          description: Marks batch saved and audited
+
+  /exams/{id}/publish:
+    post:
+      summary: Publish Exam Results (Muhtamim Only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Results published, ranks recalculated, marks locked.
+        '403':
+          description: Forbidden (Not Muhtamim)
+
+  /exams/{id}/unpublish:
+    post:
+      summary: Unpublish Exam Results (Blocked if re-evaluation is in progress)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: Exam unpublished
+        '422':
+          description: Blocked because re-evaluation requests are active
+
+  /results/student/{id}:
+    get:
+      summary: Student/Guardian view own published result
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Result marksheet
+        '403':
+          description: Forbidden or unpublished result

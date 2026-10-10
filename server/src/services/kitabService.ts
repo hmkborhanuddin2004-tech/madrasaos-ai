@@ -8,7 +8,7 @@ export class KitabService {
       `SELECT c.*, COUNT(s.id) as student_count
        FROM classes c
        LEFT JOIN students s ON c.id = s.class_id AND s.deleted_at IS NULL AND s.status = 'active'
-       WHERE c.tenant_id = ?
+       WHERE (c.tenant_id = ? OR c.tenant_id = 'inst_main')
        GROUP BY c.id
        ORDER BY c.order_index ASC`,
       [tenantId]

@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { CalendarCheck2, CheckCircle2, XCircle, Clock, AlertTriangle, Save, Check } from 'lucide-react';
+import { CalendarCheck2, CheckCircle2, XCircle, Clock, AlertTriangle, Save, Check, ChevronLeft, ChevronRight, Edit3, X } from 'lucide-react';
+import { ExportButton } from '../common/ExportButton';
 
 export const AttendanceScreen: React.FC = () => {
   const { apiCall } = useAuth();
   const [classes, setClasses] = useState<any[]>([]);
+  const [attendanceStream, setAttendanceStream] = useState<'qawmi' | 'alia'>('qawmi');
   const [selectedClassId, setSelectedClassId] = useState('cls_nahbemir');
   const [students, setStudents] = useState<any[]>([]);
   const [date, setDate] = useState('2026-09-20');
@@ -12,6 +14,54 @@ export const AttendanceScreen: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'register' | 'repeated'>('register');
   const [repeatedAbsences, setRepeatedAbsences] = useState<any[]>([]);
+
+  // Roll Number Editing State
+  const [editingRollStudent, setEditingRollStudent] = useState<{ id: string; name: string; roll: string } | null>(null);
+  const [newRollInput, setNewRollInput] = useState('');
+  const [isUpdatingRoll, setIsUpdatingRoll] = useState(false);
+
+  // Date Navigation Helpers
+  const changeDateByDays = (days: number) => {
+    const d = new Date(date);
+    d.setDate(d.getDate() + days);
+    setDate(d.toISOString().split('T')[0]);
+  };
+
+  const setToday = () => {
+    setDate(new Date().toISOString().split('T')[0]);
+  };
+
+  const setYesterday = () => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    setDate(d.toISOString().split('T')[0]);
+  };
+
+  const handleUpdateRoll = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingRollStudent || !newRollInput.trim()) return;
+    const newRoll = newRollInput.trim();
+    const targetId = editingRollStudent.id;
+    setStudents((prev) =>
+      prev.map((s) =>
+        (s.studentId === targetId || s.id === targetId)
+          ? { ...s, rollNumber: newRoll, roll_number: newRoll }
+          : s
+      )
+    );
+    setEditingRollStudent(null);
+    setIsUpdatingRoll(true);
+    try {
+      await apiCall(`/api/v1/students/${targetId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ rollNumber: newRoll })
+      });
+    } catch {
+      fetchRegister();
+    } finally {
+      setIsUpdatingRoll(false);
+    }
+  };
 
   const fetchClasses = async () => {
     try {
@@ -127,23 +177,103 @@ export const AttendanceScreen: React.FC = () => {
 
         {activeTab === 'register' && (
           <div className="flex flex-wrap items-center gap-2">
+            {/* Stream Filter (Qawmi vs Alia) */}
+            <div className="flex items-center bg-slate-100 dark:bg-slate-900 p-0.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
+              <button
+                type="button"
+                onClick={() => {
+                  setAttendanceStream('qawmi');
+                  const firstQawmi = classes.find(c => !c.madrasa_type || c.madrasa_type === 'qawmi');
+                  if (firstQawmi) setSelectedClassId(firstQawmi.id);
+                }}
+                className={`px-2.5 py-1 rounded-lg font-bold transition cursor-pointer ${
+                  attendanceStream === 'qawmi'
+                    ? 'bg-emerald-700 text-white shadow-2xs'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                কওমি
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAttendanceStream('alia');
+                  const firstAlia = classes.find(c => c.madrasa_type === 'alia');
+                  if (firstAlia) setSelectedClassId(firstAlia.id);
+                }}
+                className={`px-2.5 py-1 rounded-lg font-bold transition cursor-pointer ${
+                  attendanceStream === 'alia'
+                    ? 'bg-blue-700 text-white shadow-2xs'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                আলিয়া
+              </button>
+            </div>
+
+            {/* Filtered Classes Select */}
             <select
               value={selectedClassId}
               onChange={(e) => setSelectedClassId(e.target.value)}
-              className="text-xs border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 focus:outline-none font-semibold"
+              className="text-xs border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-800 font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-sm cursor-pointer"
             >
-              {classes.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name_bn}
-                </option>
-              ))}
+              {classes
+                .filter(c => attendanceStream === 'qawmi' ? (!c.madrasa_type || c.madrasa_type === 'qawmi') : c.madrasa_type === 'alia')
+                .map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name_bn} {c.department ? `(${c.department})` : ''}
+                  </option>
+                ))}
             </select>
 
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="text-xs border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 focus:outline-none"
+            {/* Smooth Date Navigator */}
+            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-1 rounded-xl shadow-sm">
+              <button
+                type="button"
+                onClick={() => changeDateByDays(-1)}
+                className="p-1 hover:bg-white dark:hover:bg-slate-700 rounded-lg text-slate-600 dark:text-slate-300 transition"
+                title="আগের দিন"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="text-xs bg-transparent border-0 font-bold text-slate-900 dark:text-white focus:outline-none cursor-pointer min-w-[120px]"
+                style={{ colorScheme: 'light' }}
+              />
+              <button
+                type="button"
+                onClick={() => changeDateByDays(1)}
+                className="p-1 hover:bg-white dark:hover:bg-slate-700 rounded-lg text-slate-600 dark:text-slate-300 transition"
+                title="পরের দিন"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={setToday}
+                className="px-2.5 py-1.5 text-[11px] font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl transition"
+              >
+                আজ
+              </button>
+              <button
+                type="button"
+                onClick={setYesterday}
+                className="px-2.5 py-1.5 text-[11px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl transition"
+              >
+                গতকাল
+              </button>
+            </div>
+
+            <ExportButton
+              type="csv"
+              url={`/api/v1/export/attendance.csv?date=${date}`}
+              label="📥 হাজিরা শিট (Excel) ডাউনলোড"
             />
 
             <button
@@ -172,16 +302,18 @@ export const AttendanceScreen: React.FC = () => {
             <span className="text-emerald-700 font-bold">উপস্থিত: {presentCount}</span>
             <span className="text-red-600 font-bold">অনুপস্থিত: {absentCount}</span>
             <span className="text-slate-400">|</span>
-            <span className="text-slate-500">টিপস: যারা অনুপস্থিত শুধু তাদের উপর ট্যাপ করে লাল করুন।</span>
+            <span className="text-slate-500">টিপস: যারা অনুপস্থিত শুধু তাদের উপর ট্যাপ করে লাল করুন। রোল নম্বরে ট্যাপ করে রোল পরিবর্তন করতে পারেন।</span>
           </div>
 
-          {/* Student Roster Cards for Attendance */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+          {/* Student Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
             {students.map((s) => (
               <div
                 key={s.studentId}
-                className={`p-4 rounded-2xl border transition shadow-sm flex flex-col justify-between ${
-                  s.status === 'absent'
+                className={`p-3.5 rounded-2xl border transition shadow-sm ${
+                  s.status === 'present'
+                    ? 'border-emerald-300 bg-emerald-50/70'
+                    : s.status === 'absent'
                     ? 'border-red-300 bg-red-50/70'
                     : s.status === 'late'
                     ? 'border-amber-300 bg-amber-50/70'
@@ -190,7 +322,18 @@ export const AttendanceScreen: React.FC = () => {
               >
                 <div className="flex items-start justify-between">
                   <div>
-                    <div className="text-[11px] font-bold text-slate-400">রোল: {s.rollNumber}</div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingRollStudent({ id: s.studentId, name: s.fullNameBn, roll: s.rollNumber });
+                        setNewRollInput(s.rollNumber);
+                      }}
+                      className="group inline-flex items-center gap-1 text-[11px] font-bold text-slate-600 hover:text-emerald-700 bg-slate-100 hover:bg-emerald-50 px-2 py-0.5 rounded-md transition mb-1 border border-slate-200/70"
+                      title="রোল পরিবর্তন করতে ক্লিক করুন"
+                    >
+                      <span>রোল: {s.rollNumber}</span>
+                      <Edit3 className="w-2.5 h-2.5 text-slate-400 group-hover:text-emerald-600" />
+                    </button>
                     <div className="font-bold text-sm text-slate-900">{s.fullNameBn}</div>
                     <div className="text-[10px] text-slate-500 font-mono mt-0.5">{s.guardianPhone}</div>
                   </div>
@@ -279,6 +422,62 @@ export const AttendanceScreen: React.FC = () => {
                 আলহামদুলিল্লাহ, কোনো শিক্ষার্থীর মাত্রাতিরিক্ত অনুপস্থিতি পরিলক্ষিত হয়নি।
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Roll Number Edit Modal */}
+      {editingRollStudent && (
+        <div className="fixed inset-0 bg-slate-950/70 z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-3xl p-6 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <h3 className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                <Edit3 className="w-4 h-4 text-emerald-600" />
+                <span>রোল নম্বর পরিবর্তন করুন</span>
+              </h3>
+              <button onClick={() => setEditingRollStudent(null)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateRoll} className="space-y-4 text-xs">
+              <div>
+                <div className="text-slate-500 mb-1">শিক্ষার্থীর নাম:</div>
+                <div className="font-bold text-sm text-slate-800 dark:text-slate-200 bg-slate-50 dark:bg-slate-800 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                  {editingRollStudent.name}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1.5">নতুন রোল নম্বর *</label>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  value={newRollInput}
+                  onChange={(e) => setNewRollInput(e.target.value)}
+                  className="w-full px-3.5 py-2.5 text-sm font-bold border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  placeholder="e.g. 5"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setEditingRollStudent(null)}
+                  className="px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 font-semibold"
+                >
+                  বাতিল
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdatingRoll}
+                  className="px-5 py-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl font-bold transition disabled:opacity-50"
+                >
+                  {isUpdatingRoll ? 'সংরক্ষণ হচ্ছে...' : 'রোল আপডেট করুন'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

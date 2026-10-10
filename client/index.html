@@ -4,15 +4,32 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>MadrasaOS AI - বাংলাদেশ মাদ্রাসা ম্যানেজমেন্ট ও এআই প্ল্যাটফর্ম</title>
-    <!-- Google Fonts for Bangla, Arabic, and Modern SaaS Typography -->
+    <!-- Google Fonts for Kitabkhana Design Direction -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&family=Hind+Siliguri:wght@300;400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <meta name="theme-color" content="#065F46" />
-    <meta name="description" content="বাংলাদেশ মাদ্রাসা ম্যানেজমেন্ট + এআই এজেন্ট + স্বয়ংক্রিয় কাজের সমন্বিত ডিজিটাল অপারেটিং সিস্টেম" />
+    <link href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&family=Hind+Siliguri:wght@400;600;700&family=Inter+Tight:wght@400;500;600;700&family=Noto+Sans+Bengali:wght@400;500;600;700&family=Noto+Serif+Bengali:wght@400;600;700&family=Reem+Kufi:wght@400;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap" rel="stylesheet">
+    <meta name="theme-color" content="#1F2A44" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="MadrasaOS" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.svg" />
+    <meta name="description" content="বাংলাদেশ মাদ্রাসা ও স্কুলের সম্পূর্ণ ডিজিটাল সমাধান - অ্যাটেনডেন্স, অ্যাকাউন্টিং, রেজাল্ট, মুহাসাবা, এসএমএস এবং আরও অনেক কিছু এখন একটি মাত্র প্ল্যাটফর্মে।" />
   </head>
-  <body class="bg-slate-50 text-slate-900 font-bangla antialiased selection:bg-primary-200 selection:text-primary-900 min-h-screen">
+  <body class="bg-kagoj text-kali font-bangla-body antialiased selection:bg-madder/20 selection:text-kali min-h-screen">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').then((reg) => {
+            console.log('[MadrasaOS PWA] ServiceWorker registered with scope:', reg.scope);
+          }).catch((err) => {
+            console.log('[MadrasaOS PWA] ServiceWorker registration skipped:', err);
+          });
+        });
+      }
+    </script>
   </body>
 </html>

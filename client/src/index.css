@@ -1,28 +1,181 @@
 @import "tailwindcss";
 
+@theme {
+  /* 4A. Kitabkhana Core Palette */
+  --color-kagoj: #E9E3D5;       /* Paper base bg (light mode) */
+  --color-kali: #17161A;        /* Primary ink text & structure */
+  --color-madder: #93321F;      /* Alerts, corrections, errors ONLY */
+  --color-indigo: #1F2A44;      /* Structure, binding, dark mode base */
+  --color-brass: #A87A2E;       /* Logo mark accent only */
+  --color-slate-text: #4A4A52;  /* Secondary text */
+
+  /* Legacy primary mappings aligned with binding indigo and calm slate */
+  --color-primary-50: #f4f6fa;
+  --color-primary-100: #e5eaf3;
+  --color-primary-200: #cbdaf0;
+  --color-primary-300: #9cb9df;
+  --color-primary-400: #6693cc;
+  --color-primary-500: #3c70b4;
+  --color-primary-600: #1F2A44;
+  --color-primary-700: #1a2339;
+  --color-primary-800: #161c2e;
+  --color-primary-900: #121624;
+  --color-primary-950: #0a0d15;
+
+  /* Typography Scale & Families */
+  --font-bangla-body: 'Noto Serif Bengali', serif;
+  --font-bangla-display: 'Hind Siliguri', sans-serif;
+  --font-arabic-body: 'Amiri', serif;
+  --font-arabic-display: 'Reem Kufi', sans-serif;
+  --font-latin-body: 'Source Serif 4', serif;
+  --font-ui: 'Inter Tight', 'Noto Sans Bengali', system-ui, sans-serif;
+
+  /* Backward compatibility font aliases */
+  --font-bangla: 'Noto Serif Bengali', 'Hind Siliguri', system-ui, sans-serif;
+  --font-arabic: 'Amiri', 'Reem Kufi', serif;
+  --font-sans: 'Inter Tight', 'Noto Sans Bengali', system-ui, sans-serif;
+}
+
 @layer base {
+  :root {
+    --bg-kagoj: #E9E3D5;
+    --text-kali: #17161A;
+    --binding-indigo: #1F2A44;
+    --alert-madder: #93321F;
+    --text-slate: #4A4A52;
+  }
+
   body {
-    background-color: #f8fafc;
-    color: #0f172a;
-    font-family: 'Hind Siliguri', 'SolaimanLipi', system-ui, sans-serif;
+    background-color: var(--bg-kagoj);
+    color: var(--text-kali);
+    font-family: var(--font-bangla-body);
+    line-height: 1.75;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Universal keyboard-first visible focus floor */
+  *:focus-visible {
+    outline: 2px solid #93321F !important;
+    outline-offset: 2px !important;
+  }
+
+  /* Page load sequence (250ms ease-out) */
+  @media (prefers-reduced-motion: no-preference) {
+    .page-enter {
+      animation: pageLoad 250ms ease-out forwards;
+    }
+  }
+
+  @keyframes pageLoad {
+    from {
+      opacity: 0.85;
+      transform: translateY(2px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 }
 
-/* Custom scrollbars */
+/* 4A. Kitabkhana Architectural Utilities */
+.card-kitab {
+  background-color: #FAF8F5;
+  border: 1px solid rgba(23, 22, 26, 0.12);
+  border-radius: 2px;
+  box-shadow: 0 1px 0 rgba(23, 22, 26, 0.08);
+}
+
+.table-kitab {
+  border-collapse: collapse;
+  width: 100%;
+  border: 1px solid #17161A;
+  border-radius: 0;
+}
+
+.table-kitab th {
+  border: 1px solid #17161A;
+  padding: 0.5rem 0.75rem;
+  background-color: #E2DBD0;
+  color: #17161A;
+  font-family: var(--font-ui);
+  font-weight: 600;
+  text-align: left;
+}
+
+.table-kitab td {
+  border: 1px solid rgba(23, 22, 26, 0.25);
+  padding: 0.5rem 0.75rem;
+}
+
+.table-kitab tr:focus-within,
+.table-kitab tr.row-focused {
+  outline: 2px solid #93321F !important;
+  outline-offset: -2px;
+}
+
+.hairline-break {
+  border: 0;
+  border-top: 1px solid #17161A;
+  margin: 1.5rem 0;
+}
+
+/* Margin Note (প্রান্তটীকা) for Teacher Remarks / Next Goals */
+.margin-note {
+  font-family: var(--font-bangla-body);
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: #4A4A52;
+  border-left: 2px solid #93321F;
+  padding-left: 0.75rem;
+  margin: 0.5rem 0;
+}
+
+/* Arabic Headings in Reem Kufi */
+.font-reem-kufi {
+  font-family: 'Reem Kufi', sans-serif;
+}
+
+/* Arabic Body in Amiri */
+.font-amiri {
+  font-family: 'Amiri', serif;
+  line-height: 1.9;
+}
+
+/* Bangla Display */
+.font-bangla-display {
+  font-family: 'Hind Siliguri', sans-serif;
+  font-weight: 700;
+}
+
+/* UI & Numerical Data */
+.font-ui {
+  font-family: 'Inter Tight', 'Noto Sans Bengali', system-ui, sans-serif;
+}
+
+/* Rub el Hizb (۞) Station Mark */
+.rub-el-hizb {
+  font-family: 'Amiri', 'Reem Kufi', serif;
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+/* Discrete Scrollbars with Ink Tint */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: #E9E3D5;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 4px;
+  background: #1F2A44;
+  border-radius: 2px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #17161A;
 }
